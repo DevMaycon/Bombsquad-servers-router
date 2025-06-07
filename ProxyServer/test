@@ -1,6 +1,0 @@
-rm main; 
-
-g++ src/Main/main.cc -o main;
-
-chmod +x ./main;
-./main
