@@ -35,3 +35,4 @@
 config.jso*
 .bsuuid*
 .bsac2*
+*.pyc
