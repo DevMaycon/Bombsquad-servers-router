@@ -8,16 +8,25 @@
 
 class Server {
     private:
+        sockaddr_in ServerAddress;
+        std::unordered_map<int, Client> Clients = {};
+
         int ServerID = 0;
         int MaxPlayers = 10;
         int LastClientID = 113;
-        std::unordered_map<int, Client> Clients = {};
 
     public:
-        Server(int ServerID);
-        
-        int AddClient(Client);
-        int RemoveClient(Client);
+        Server(int ServerID, sockaddr_in ServerAddress);
+
+        std::unordered_map<int, Client> GetClients();
+        sockaddr_in GetAddress();
+        int GetServerID();
+
+
+        int AddressIsConnected(sockaddr_in address);
+        int AddClient(sockaddr_in Address);
+        int RemoveClient(sockaddr_in Address);
+
         bool IsFull();
 };
 
