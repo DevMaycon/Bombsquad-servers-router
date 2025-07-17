@@ -1,0 +1,7 @@
+#!/bin/bash
+rm -rf main; 
+
+g++ $(find ../ -name '*.cc') -I ../ -o main;
+
+chmod +x ./main;
+./main
