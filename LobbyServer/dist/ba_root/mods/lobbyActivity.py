@@ -2,7 +2,8 @@ import bascenev1 as bs
 import _bascenev1 as _bs
 from lobbyActors import *
 
-class Lobby(bs.GameActivity):
+
+class Lobby(bs.GameActivity[bs.Player, bs.Team]):
 
     # Default Configs
     name: str = "\ue035 | Server Lobby \ue043"

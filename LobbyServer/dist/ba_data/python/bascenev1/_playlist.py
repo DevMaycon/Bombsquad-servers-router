@@ -51,7 +51,6 @@ def filter_playlist(
         unowned_maps = []
         unowned_game_types = set()
 
-    print(playlist)
     for entry in copy.deepcopy(playlist):
         # 'map' used to be called 'level' here.
         if 'level' in entry:
