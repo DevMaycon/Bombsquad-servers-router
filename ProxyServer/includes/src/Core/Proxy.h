@@ -8,20 +8,19 @@
 
 class ProxyServer {
     private:
+        PacketHandler ProxyHandler;
         sockaddr_in ProxyAddress;
         int ProxySocket;
         int ProxyPort;
-        std::vector<Server> Servers;
         
+        std::vector<Server> Servers = {};
         int Listen();
-
     public:
-        ProxyServer(int ProxyPort);
+        ProxyServer(int ProxyPort) : ProxyPort(ProxyPort), ProxyHandler(PacketHandler(Servers, ProxySocket)) {};
+        PacketHandler &GetProxyHandler();
         std::vector<Server> GetServers();
         void Run();
         void AddServer(Server Server);
-
-
 };
 
 

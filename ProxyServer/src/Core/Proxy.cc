@@ -3,10 +3,9 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <iostream>
-
-ProxyServer::ProxyServer(int ProxyPort) {
-    this->ProxyPort = ProxyPort;
-}
+#include <thread>
+#include <algorithm>
+#include <cstring>
 
 int ProxyServer::Listen() {
     ProxySocket = socket(AF_INET, SOCK_DGRAM, 0);
@@ -19,7 +18,7 @@ int ProxyServer::Listen() {
     ProxyAddress.sin_port = htons(ProxyPort);
     ProxyAddress.sin_addr.s_addr = INADDR_ANY;
 
-    if (bind(ProxySocket, (sockaddr*)&ProxyAddress, sizeof(ProxyAddress))  == -1) {
+    if (bind(ProxySocket, (sockaddr*) &ProxyAddress, sizeof(ProxyAddress))  == -1) {
         perror("Proxy failed in listen port");
         return -1;
     }
@@ -30,10 +29,15 @@ int ProxyServer::Listen() {
 
 void ProxyServer::AddServer(Server server) {
     Servers.push_back(server);
+    std::cout << Servers.size() << std::endl;
 }
 
 std::vector<Server> ProxyServer::GetServers() {
-    return Servers;
+    return this->Servers;
+}
+
+PacketHandler &ProxyServer::GetProxyHandler() {
+    return this->ProxyHandler;
 }
 
 
@@ -52,6 +56,16 @@ void ProxyServer::Run() {
             (sockaddr*) &ClientAddress, &ClientLen
         );
 
-        NetworkHandler::HandleConnection(ProxySocket, buffer, recv_bytes, Servers, ClientAddress);
+        std::vector<uint8_t> new_buffer(buffer, buffer+recv_bytes);
+       
+        std::thread ProxyThread([this, new_buffer, recv_bytes, ClientAddress]() mutable {
+            this->ProxyHandler.HandleConnection((char*) new_buffer.data(), recv_bytes, ClientAddress);
+        });
+        //std::thread ProxyThread([*ProxyHandler, new_buffer, recv_bytes, ClientAddress]() mutable {
+        //    ProxyHandler.HandleConnection(new_buffer.data(), recv_bytes, ClientAddress);
+        //});
+        ProxyThread.detach();
+
+        //ProxyHandler.HandleConnection(buffer, recv_bytes, ClientAddress);
     };
 }
