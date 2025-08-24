@@ -144,11 +144,19 @@ void PacketHandler::RedirectAll(NetworkHandler::Packet &Packet) {
     uint8_t ServerID = Packet.data[0];
     std::cout << "Redirecting all players to server " << (int)ServerID << std::endl;
 
+    std::queue<NetworkHandler::Packet> RedirectQueue;
+
     for (auto client: Lobby.GetClients()) {
         NetworkHandler::Packet RedirectPacket = Packet;
-        RedirectPacket.data[0] = client.first;
-        RedirectPacket.data[1] = ServerID;
-        RedirectPlayer(RedirectPacket);
+        RedirectPacket.data[0] = static_cast<uint8_t>(client.first);
+        RedirectPacket.data[1] = static_cast<uint8_t>(ServerID);
+        RedirectQueue.push(RedirectPacket);
+    }
+
+    for (int i = 0; i < RedirectQueue.size() + 1; i++) {
+        NetworkHandler::Packet packet = RedirectQueue.front();
+        RedirectPlayer(packet);
+        RedirectQueue.pop();
     }
 };
 
