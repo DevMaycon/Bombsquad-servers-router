@@ -4,13 +4,13 @@
 #include <iomanip>
 #include <fstream>
 #include <queue>
-#include <cstring>
+
 
 using namespace NetworkHandler;
 
 void PacketHandler::SetLobby(const Server &lobby) { 
     this->Lobby = lobby; 
-    std::cout << "LOBBY ADDRESS: " << inet_ntoa(Lobby.GetAddress().sin_addr) << "\nPORT: " << ntohs(Lobby.GetAddress().sin_port) << std::endl;
+    std::cout << "LOBBY ADDRESS: " << inet_ntoa(Lobby.GetAddress().sin_addr) << " PORT: " << ntohs(Lobby.GetAddress().sin_port) << std::endl;
 };
 
 int PacketHandler::SendTo(sockaddr_in destination, const char *buffer, int buffer_size) {
@@ -23,10 +23,10 @@ void PacketHandler::HandleConnection (const char* buffer, int bytes_size, sockad
         if (log.is_open()) log.write(buffer, bytes_size);
 
         Packet NetworkPacket;
+        NetworkPacket.address = ClientAddress;
         NetworkPacket.header = buffer[0];
         NetworkPacket.data_size = bytes_size;
         memcpy(&NetworkPacket.data, buffer + 1, bytes_size - 1);
-        memcpy(&NetworkPacket.raw_data, buffer, bytes_size);
 
         uint16_t port = ntohs(ClientAddress.sin_port);
         uint32_t ip = ClientAddress.sin_addr.s_addr;
@@ -56,10 +56,9 @@ void PacketHandler::HandleConnection (const char* buffer, int bytes_size, sockad
             }
         } 
 
-        else if (GetLobby().AddressIsConnected(ClientAddress)) {
+        else if (Lobby.AddressIsConnected(ClientAddress)) {
             sockaddr_in dest = Lobby.GetAddress();
             SendTo(dest, buffer, bytes_size);
-            return;
         } 
 
         else {
@@ -67,7 +66,7 @@ void PacketHandler::HandleConnection (const char* buffer, int bytes_size, sockad
                 if (server.AddressIsConnected(ClientAddress)) {
                     sockaddr_in dest = server.GetAddress();
                     SendTo(dest, buffer, bytes_size);
-                    return;
+                    break;
                 }
             }
         }
@@ -79,13 +78,11 @@ void PacketHandler::HandleConnection (const char* buffer, int bytes_size, sockad
                 Ping(ClientAddress);
                 break;
 
-            case MessageType::CLIENT_JOIN_REQUEST: {
-                int server_response = SendTo(GetLobby().GetAddress(), buffer, bytes_size);
-                if (server_response != -1) { ClientRequest(ClientAddress, NetworkPacket); }
+            case MessageType::CLIENT_JOIN_REQUEST: 
+                JoinRequest(NetworkPacket);
                 break;
-            }
 
-            case MessageType::CLIENT_JOIN_ACCEPTED: 
+            case MessageType::CLIENT_JOIN_ACCEPTED:
                 ClientJoin(NetworkPacket);
                 break;
 
@@ -97,8 +94,19 @@ void PacketHandler::HandleConnection (const char* buffer, int bytes_size, sockad
                 RedirectPlayer(NetworkPacket);
                 break;
 
+            case MessageType::CLIENT_DISCONNECTED: {
+                QuitRequest(NetworkPacket);
+                break;
+            }
+
+            case MessageType::CLIENT_DISCONNECTED_ACK: {
+                ClientExit(NetworkPacket);
+                break;
+            }
+
             case MessageType::CLIENT_DISCONNECTED_BY_HOST_ACK:
                 SendTo(Lobby.GetAddress(), buffer, bytes_size);
+                std::cout << "client redirected or kicked." << std::endl;
                 break;
 
             default: break;
@@ -110,12 +118,36 @@ void PacketHandler::Ping(sockaddr_in ClientAddress) {
     SendTo(ClientAddress, pong_response, 1);
 };
 
-void PacketHandler::ClientRequest(sockaddr_in ClientAddress, NetworkHandler::Packet &Packet) {
+void PacketHandler::JoinRequest(NetworkHandler::Packet &Packet) {
     ClientJoinRequest client_request;
     client_request.request_id = Packet.data[2];
-    client_request.address = ClientAddress;
+    client_request.address = Packet.address;
+
+
+    for (auto &server : Servers) {
+        if (server.AddressIsConnected(client_request.address)) {
+            server.ClientRequest(client_request);
+            return;
+        }
+    }
 
     Lobby.ClientRequest(client_request);
+    SendTo(Lobby.GetAddress(), Packet.GetRawData(), Packet.data_size);
+};
+
+void PacketHandler::QuitRequest(NetworkHandler::Packet &Packet) {
+    ClientQuitRequest client_request;
+    client_request.client_id = Packet.data[0];
+    client_request.address = Packet.address;
+
+    for (auto &server : Servers) {
+        if (server.AddressIsConnected(client_request.address)) {
+            server.ClientExitRequest(client_request);
+            return;
+        }
+    }
+
+    Lobby.ClientExitRequest(client_request);
 };
 
 void PacketHandler::ClientJoin(NetworkHandler::Packet &Packet) {
@@ -123,22 +155,57 @@ void PacketHandler::ClientJoin(NetworkHandler::Packet &Packet) {
     uint8_t RequestID = Packet.data[1];
     uint8_t ServerID = Packet.data[2];
 
-    auto lobby_queue = Lobby.GetClientsQueue();
-
+    auto lobby_queue = Lobby.GetClientsJoinQueue();
     auto client_request = lobby_queue.find(RequestID);
+
     if (client_request != lobby_queue.end()) {
         ClientJoinRequest client = client_request->second;
 
-        GetLobby().ClientJoin(ClientID, RequestID);
-        SendTo(client.address, Packet.raw_data, Packet.data_size);
+        Lobby.ClientJoin(ClientID, RequestID);
+        SendTo(client.address, Packet.GetRawData(), Packet.data_size);
+        return;
+    }
+
+    for (auto &server : Servers) {
+        auto server_queue = server.GetClientsJoinQueue();
+        auto client_request = server_queue.find(RequestID);
+
+        if (server_queue.find(RequestID) != server_queue.end()) {
+            ClientJoinRequest client = client_request->second;
+            server.ClientJoin(ClientID, RequestID);
+            SendTo(client.address, Packet.GetRawData(), Packet.data_size);
+            return;
+        }
     }
 };
 
 void PacketHandler::ClientExit(NetworkHandler::Packet &Packet) {
+    sockaddr_in client_address = Packet.address;
+    sockaddr_in lobby_address = Lobby.GetAddress();
     uint8_t ClientID = Packet.data[0];
-    Lobby.ClientExit(ClientID);
-};
 
+    auto lobby_queue = Lobby.GetClientsQuitQueue();
+    auto client_request = lobby_queue.find(ClientID);
+
+    if (client_request != lobby_queue.end()) {
+        ClientQuitRequest client = client_request->second;
+        Lobby.ClientExit(ClientID);
+        SendTo(client.address, Packet.GetRawData(), Packet.data_size);
+        return;
+    }
+
+    for (auto &server : Servers) {
+        auto server_queue = server.GetClientsQuitQueue();
+        auto client_request = server_queue.find(ClientID);
+
+        if (server_queue.find(ClientID) != server_queue.end()) {
+            ClientQuitRequest client = client_request->second;
+            server.ClientExit(ClientID);
+            SendTo(client.address, Packet.GetRawData(), Packet.data_size);
+            return;
+        }
+    }
+};
 
 void PacketHandler::RedirectAll(NetworkHandler::Packet &Packet) {
     uint8_t ServerID = Packet.data[0];
@@ -165,7 +232,7 @@ void PacketHandler::RedirectPlayer(NetworkHandler::Packet &Packet) {
     uint8_t ServerID = Packet.data[1];
 
     if (Lobby.GetClients().find(ClientID) != Lobby.GetClients().end()) {
-        auto client = GetLobby().GetClients().find(ClientID)->second;
+        auto client = Lobby.GetClients().find(ClientID)->second;
 
         char buffer[2];
         buffer[0] = static_cast<uint8_t>(MessageType::CLIENT_DISCONNECTED_BY_HOST);
@@ -178,7 +245,7 @@ void PacketHandler::RedirectPlayer(NetworkHandler::Packet &Packet) {
 
 
 int PacketHandler::LobbyRedirect(uint8_t ClientID, uint8_t ServerID) {
-    auto &clients = GetLobby().GetClients();
+    auto &clients = Lobby.GetClients();
     auto it = clients.find(ClientID);
     if (it == clients.end()) return -1;
 

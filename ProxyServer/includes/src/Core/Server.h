@@ -11,10 +11,16 @@ struct ClientJoinRequest {
     uint8_t request_id;
 };
 
+struct ClientQuitRequest {
+    sockaddr_in address;
+    uint8_t client_id;
+};
+
 class Server {
     private:
         sockaddr_in ServerAddress;
         std::unordered_map<uint8_t, ClientJoinRequest> ClientsJoinQueue = {};
+        std::unordered_map<uint8_t, ClientQuitRequest> ClientsQuitQueue = {};
         std::unordered_map<uint8_t, Client> Clients = {};
 
         int ServerID = 0;
@@ -24,7 +30,8 @@ class Server {
         Server() {};
         Server(const int ServerID, sockaddr_in ServerAddress) : ServerID(ServerID), ServerAddress(ServerAddress) {};
 
-        std::unordered_map<uint8_t, ClientJoinRequest> GetClientsQueue();
+        std::unordered_map<uint8_t, ClientJoinRequest> GetClientsJoinQueue() { return this->ClientsJoinQueue; };
+        std::unordered_map<uint8_t, ClientQuitRequest> GetClientsQuitQueue() { return this->ClientsQuitQueue; };
         std::unordered_map<uint8_t, Client> &GetClients();
         int GetServerID();
 
@@ -33,9 +40,12 @@ class Server {
         bool AddressIsConnected(sockaddr_in Address);
 
         int AddClient(uint8_t ClientID, sockaddr_in ClientAddress);
+
         int ClientRequest(ClientJoinRequest JoinRequest);
-        int ClientJoin(uint8_t ClientID, uint8_t RequestID);
+        int ClientExitRequest(ClientQuitRequest QuitRequest);
+        
         int ClientExit(uint8_t ClientID);
+        int ClientJoin(uint8_t ClientID, uint8_t RequestID);
 
         bool IsFull();
 };

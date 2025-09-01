@@ -8,10 +8,6 @@ std::unordered_map<uint8_t, Client> &Server::GetClients() {
     return Clients;
 }
 
-std::unordered_map<uint8_t, ClientJoinRequest> Server::GetClientsQueue() {
-    return ClientsJoinQueue;
-}
-
 sockaddr_in Server::GetAddress() {
     return ServerAddress;
 }
@@ -25,13 +21,27 @@ int Server::GetServerID() {
 }
 
 int Server::AddClient(uint8_t ClientID, sockaddr_in ClientAddress) {
-        Client client(ClientAddress);
-        client.SetClientId(ClientID);
+    if (AddressIsConnected(ClientAddress)) {
+        for (auto it = Clients.begin(); it != Clients.end(); ++it) {
+            sockaddr_in client_addr = it->second.GetClientAddress();
+            if (client_addr.sin_addr.s_addr == ClientAddress.sin_addr.s_addr &&
+                ntohs(client_addr.sin_port) == ntohs(ClientAddress.sin_port)) {
 
-        Clients.emplace(ClientID, client);
-        return 0;
+                Client client = std::move(it->second);
+                client.SetClientId(ClientID);
+
+                Clients.erase(it);
+                Clients.emplace(ClientID, std::move(client));
+                return 1;
+            }
+        }
+    }
+
+    Client client(ClientAddress);
+    client.SetClientId(ClientID);
+    Clients.emplace(ClientID, std::move(client));
+    return 1;
 }
-
 
 bool Server::AddressIsConnected(sockaddr_in Address) {
     for (auto &[client_id, client] : Clients) {
@@ -46,9 +56,13 @@ bool Server::AddressIsConnected(sockaddr_in Address) {
     return false;
 }
 
-
 int Server::ClientRequest(ClientJoinRequest JoinRequest) {
     ClientsJoinQueue.emplace(JoinRequest.request_id, JoinRequest);
+    return 0;
+};
+
+int Server::ClientExitRequest(ClientQuitRequest QuitRequest) {
+    ClientsQuitQueue.emplace(QuitRequest.client_id, QuitRequest);
     return 0;
 };
 
@@ -60,12 +74,11 @@ int Server::ClientJoin(uint8_t ClientID, uint8_t RequestID) {
         ClientsJoinQueue.erase(RequestID);
         return 0;
     }
-
     return -1;
 }
 
-
 int Server::ClientExit(uint8_t ClientID) {
+    ClientsQuitQueue.erase(ClientID);
     Clients.erase(ClientID);
     return 0;
 }
