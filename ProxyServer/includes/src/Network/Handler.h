@@ -1,27 +1,35 @@
 #ifndef NETWORK_HANDLER
 #define NETWORK_HANDLER
 
+#include "includes/src/Core/Server.h"
 #include <arpa/inet.h>
 #include <vector>
-#include "includes/src/Core/Server.h"
+#include <cstring>
 
 
 namespace NetworkHandler {
 
     // Custom Bombsquad Packet Structure
     struct Packet {
+        sockaddr_in address;
         uint8_t header;
         char data[1024];
         int data_size;
         char raw_data[1024];
+
+        char *GetRawData() { 
+            memcpy(raw_data, &header, 1);
+            memcpy(raw_data + 1, data, data_size - 1);
+            return raw_data;
+        };
     };
 
     // Proxy Custom Messages ( Packet Size )
     enum class MessageType : int {
         UNKNOWN = -1,
 
-        PING = 0,
-        PONG = 1,
+        PING = 11,
+        PONG = 12,
 
         CLIENT_EXIT = 32,
         CLIENT_INFO = 18,
@@ -57,8 +65,10 @@ class PacketHandler {
         // Functions for Messages
         void Ping(sockaddr_in ClientAddress);
 
-        void ClientRequest(sockaddr_in ClientAddress, NetworkHandler::Packet &Packet);
+        void JoinRequest(NetworkHandler::Packet &Packet);
         void ClientJoin(NetworkHandler::Packet &Packet);
+
+        void QuitRequest(NetworkHandler::Packet &Packet);
         void ClientExit(NetworkHandler::Packet &Packet);
 
         void RedirectAll(NetworkHandler::Packet &Packet);

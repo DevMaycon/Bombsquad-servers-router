@@ -23,13 +23,12 @@ int ProxyServer::Listen() {
         return -1;
     }
 
-    std::cout << "Proxy started in port " << ProxyPort << std::endl;
+    std::cout << "PROXY STARTED IN PORT: " << ProxyPort << std::endl;
     return 0;
 }
 
 void ProxyServer::AddServer(Server server) {
     Servers.push_back(server);
-    std::cout << Servers.size() << std::endl;
 }
 
 std::vector<Server> ProxyServer::GetServers() {
@@ -61,11 +60,7 @@ void ProxyServer::Run() {
         std::thread ProxyThread([this, new_buffer, recv_bytes, ClientAddress]() mutable {
             this->ProxyHandler.HandleConnection((char*) new_buffer.data(), recv_bytes, ClientAddress);
         });
-        //std::thread ProxyThread([*ProxyHandler, new_buffer, recv_bytes, ClientAddress]() mutable {
-        //    ProxyHandler.HandleConnection(new_buffer.data(), recv_bytes, ClientAddress);
-        //});
+        
         ProxyThread.detach();
-
-        //ProxyHandler.HandleConnection(buffer, recv_bytes, ClientAddress);
     };
 }
