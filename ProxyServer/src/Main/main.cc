@@ -31,7 +31,7 @@ int main() {
 
     // Create servers based in port scan
     for (auto it = bombsquad_servers_ports.begin(); it != bombsquad_servers_ports.end(); ++it ) {
-        if (scanned_servers.find(*it) != scanned_servers.end()) {
+        if (scanned_servers.find(*it) == scanned_servers.end()) {
             sockaddr_in server_addr = {};
             server_addr.sin_family = AF_INET;
             server_addr.sin_port = htons(*it);
@@ -39,6 +39,7 @@ int main() {
 
             // Add server in list
             Server GameServer(std::distance(bombsquad_servers_ports.begin(), it)+1, server_addr);
+            scanned_servers.emplace(*it, GameServer);
             Proxy.AddServer(GameServer);
         }
     }
