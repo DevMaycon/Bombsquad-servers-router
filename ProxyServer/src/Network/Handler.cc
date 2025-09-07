@@ -38,7 +38,10 @@ void PacketHandler::HandleConnection (const char* buffer, int bytes_size, sockad
         Server *server = nullptr;
         for (auto &i_server : Servers) {
             is_from_server = (i_server.GetAddress().sin_addr.s_addr == ip && ntohs(i_server.GetAddress().sin_port) == port);
-            server = &i_server;
+            if (is_from_server) {
+                server = &i_server;
+                break;
+            }
         }
 
 
