@@ -1,15 +1,18 @@
+from bascenev1lib.gameutils import SharedObjects
+from bascenev1lib.actor.spaz import Spaz
 import bascenev1 as bs
 import _bascenev1 as _bs
-from bascenev1lib.gameutils import SharedObjects
 import server_connector
 
 class Redirector:
     def __init__(self,
           name: str,
           position: tuple[2],
-          scale: tuple[2]
+          scale: tuple[2],
+          server_id: int = 0
         ):
         self.name = name
+        self.server_id = server_id
 
         # Create title node
         self.title_node = _bs.newnode('text', attrs={
@@ -59,4 +62,29 @@ class Redirector:
         collision = bs.getcollision()
         sourcenode = collision.sourcenode
         opposingnode = collision.opposingnode
-        print(self.name)
+
+        if opposingnode.getnodetype() == 'spaz':
+            self.teleport_player(opposingnode)
+
+    def teleport_player(self, player_node):
+        player = player_node.source_player
+        sessionplayer = player.sessionplayer
+        roster = self.get_player_roster(sessionplayer.get_v1_account_id())
+
+        if not roster:
+            print(f'eh... failed to teleport player {sessionplayer.get_v1_account_id()}')
+            return
+
+        client_id = roster['client_id']
+        server_connector.send(
+            server_connector.MessageType.REDIRECT_PLAYER,
+            client_id,
+            self.server_id,
+        )
+
+    def get_player_roster(self, pbid: str) -> dict:
+        for player in _bs.get_game_roster():
+            if player['account_id'] == pbid:
+                return player
+
+        return {}
